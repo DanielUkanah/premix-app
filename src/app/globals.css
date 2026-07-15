@@ -1,3 +1,4 @@
+/* app/globals.css */
 @import "tailwindcss";
 
 :root {
@@ -9,9 +10,20 @@
   --brand-purple-dark: #200c3c;
   --brand-magenta: #e2137a;
   --brand-magenta-soft: #f6d9e9;
-  --brand-surface: #ffffff;
-  --brand-border: #e7e1ef;
-  --brand-muted: #6f6480;
+
+  /* Card Surfaces & Borders */
+  --brand-surface: #ffffff;      
+  --brand-surface-stat: #fafafa; 
+  --brand-border: #e7e1ef;       
+
+  /* Typography Colors */
+  --brand-text-muted: #6f6480; 
+
+  /* Status colors (Pills, Profit cards) */
+  --bg-positive: #eaf3de;
+  --text-positive: #3b6d11;
+  --bg-negative: #fde8e8; 
+  --text-negative: #9b1c1c; 
 }
 
 @theme inline {
@@ -25,8 +37,20 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
 }
 
+/* SMALL SECTION HEADERS */
+.section-header {
+  font-size: 13px;
+  color: var(--brand-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+/* HEADER GRADIENT STYLES */
 .brand-diagonal {
   background: linear-gradient(
     115deg,
@@ -37,8 +61,102 @@ body {
   );
 }
 
-.card {
+/* CARDS */
+.card, .card-stat, .card-profit-positive, .card-profit-negative {
   background: var(--brand-surface);
+  border: 0.5px solid var(--brand-border);
+  border-radius: 12px;
+  box-shadow: none !important;
+}
+
+.card-stat {
+  background: var(--brand-surface-stat); 
+}
+
+/* PROFIT LOGIC CARD COLORS (Explicit overrides) */
+.card-profit-positive {
+  background: var(--bg-positive) !important;
+  border-color: #d8e5c8 !important;
+}
+.card-profit-positive .card-number {
+  color: var(--text-positive) !important;
+}
+
+.card-profit-negative {
+  background: var(--bg-negative) !important;
+  border-color: #f8b4b4 !important;
+}
+.card-profit-negative .card-number {
+  color: var(--text-negative) !important;
+}
+
+.card-label {
+  font-size: 13px;
+  color: var(--brand-text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.card-number {
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+/* COLOR FIX: Standardizing custom text classes directly in CSS */
+.text-stat-positive {
+  color: var(--text-positive) !important;
+}
+.text-stat-negative {
+  color: var(--text-negative) !important;
+}
+
+/* PILLS / STATUS TAGS */
+.pill-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.625rem;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 9999px;
+}
+
+.pill-badge-positive {
+  background: var(--bg-positive) !important;
+  color: var(--text-positive) !important;
+}
+
+.pill-badge-negative {
+  background: var(--bg-negative) !important;
+  color: var(--text-negative) !important;
+}
+
+/* BUTTONS */
+button, .btn {
+  text-transform: none; 
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: var(--brand-magenta);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: none;
+}
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+.btn-secondary {
+  background: white;
+  color: var(--foreground);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
   border: 1px solid var(--brand-border);
-  border-radius: 14px;
+}
+.btn-secondary:hover {
+  background: #fdfcff;
 }
