@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7f5fa;
+  --foreground: #1f1230;
+
+  /* PremiX brand tokens */
+  --brand-purple: #34145c;
+  --brand-purple-dark: #200c3c;
+  --brand-magenta: #e2137a;
+  --brand-magenta-soft: #f6d9e9;
+  --brand-surface: #ffffff;
+  --brand-border: #e7e1ef;
+  --brand-muted: #6f6480;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-brand-purple: var(--brand-purple);
+  --color-brand-magenta: var(--brand-magenta);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+}
+
+.brand-diagonal {
+  background: linear-gradient(
+    115deg,
+    var(--brand-purple) 0%,
+    var(--brand-purple) 48%,
+    var(--brand-magenta) 52%,
+    var(--brand-magenta) 100%
+  );
+}
+
+.card {
+  background: var(--brand-surface);
+  border: 1px solid var(--brand-border);
+  border-radius: 14px;
+}
