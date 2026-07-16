@@ -107,36 +107,57 @@ export default function FleetFinanceTracker() {
         .map(d => ({ id: d.id, ...d.data() }))
         .filter(inv => inv.date && inv.date.startsWith(monthPrefix));
 
-      monthlyInvoices.forEach(inv => {
-        (inv.items || []).forEach(item => {
-          let matchedVehicle = VEHICLES.find(v => v.id === item.id);
-          if (!matchedVehicle) {
-            matchedVehicle = VEHICLES.find(v => {
-              const cleanTruckName = v.name.split(' (')[0].toLowerCase().trim();
-              const itemName = (item.name || "").toLowerCase();
-              const itemDesc = (item.description || "").toLowerCase();
-              return itemName.includes(cleanTruckName) || itemDesc.includes(cleanTruckName);
-            });
-          }
+      // ... inside fetchAnalysisData() in page.jsx ...
 
-          if (matchedVehicle && statsMap[matchedVehicle.id]) {
-            const price = Number(item.price || item.rate || 0);
-            const days = Number(item.days || item.qty || item.quantity || 1);
-            const amt = Number(item.total || item.amount || (price * days) || 0);
+monthlyInvoices.forEach(inv => {
+  (inv.items || []).forEach(item => {
+    let matchedVehicle = VEHICLES.find(v => v.id === item.id);
+    
+    // SMART SEARCH: If no direct ID match, test description/name for equipment names OR mob/demob keywords
+    if (!matchedVehicle) {
+      matchedVehicle = VEHICLES.find(v => {
+        const cleanTruckName = v.name.split(' (')[0].toLowerCase().trim(); // e.g., "mixer 001"
+        const cleanTruckNumber = v.id.replace(/\D/g, ""); // extracts only numbers, e.g., "001"
+        
+        const itemName = (item.name || "").toLowerCase();
+        const itemDesc = (item.description || "").toLowerCase();
 
-            if (amt > 0) {
-              statsMap[matchedVehicle.id].rev += amt;
-              statsMap[matchedVehicle.id].invSources.push({ 
-                date: inv.date, 
-                desc: item.name || item.description || inv.subject || `Invoice #${inv.number || 'N/A'}`, 
-                customer: inv.customerName || "Bostine Logistics",
-                amount: amt 
-              });
-            }
-          }
-        });
+        // 1. Direct name mentions (e.g., "Hire of Mixer 001")
+        const matchesName = itemName.includes(cleanTruckName) || itemDesc.includes(cleanTruckName);
+        
+        // 2. Mob/demob specific tracking:
+        // Matches "Mob of 001", "Demobilization Mixer 001", "Mixer 001 mob"
+        const isMobOrDemob = itemName.includes("mob") || itemName.includes("mobil") || itemDesc.includes("mob") || itemDesc.includes("mobil");
+        const mentionsNumber = cleanTruckNumber && (itemName.includes(cleanTruckNumber) || itemDesc.includes(cleanTruckNumber));
+
+        return matchesName || (isMobOrDemob && mentionsNumber);
       });
+    }
 
+    if (matchedVehicle && statsMap[matchedVehicle.id]) {
+      const price = Number(item.price || item.rate || 0);
+      const days = Number(item.days || item.qty || item.quantity || 1);
+      const amt = Number(item.total || item.amount || (price * days) || 0);
+
+      if (amt > 0) {
+        statsMap[matchedVehicle.id].rev += amt;
+        
+        // Label it clearly in the breakdown list
+        const isMobItem = (item.name || "").toLowerCase().includes("mob") || (item.name || "").toLowerCase().includes("mobil");
+        const displayCategory = isMobItem ? "Mob / Demob" : "Job Revenue";
+
+        statsMap[matchedVehicle.id].invSources.push({ 
+          date: inv.date, 
+          desc: item.name || item.description || inv.subject || `Invoice #${inv.number || 'N/A'}`, 
+          category: displayCategory,
+          customer: inv.customerName || "Bostine Logistics",
+          amount: amt 
+        });
+      }
+    }
+  });
+});
+      
       const expSnapshot = await getDocs(collection(db, "fleet_data"));
       expSnapshot.docs.forEach(docSnap => {
         if (docSnap.id.includes(monthPrefix)) {
