@@ -1,26 +1,29 @@
 "use client";
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Loader2, LogOut, ChevronLeft, ChevronRight, ArrowLeft, 
   TrendingUp, TrendingDown, Activity, Truck, Waves, 
   Download, FileText, Plus, Trash2, FileBarChart, X, 
-  CheckSquare, Square, Info
+  CheckSquare, Square, Info, Wrench
 } from "lucide-react";
 import { db, auth } from "@/lib/firebase";
 import { collection, getDocs, doc, getDoc, setDoc } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { VEHICLES } from "@/lib/fleet";
 
-const CATEGORIES = [
+const GENERAL_CATEGORIES = [
   "Fuel",
-  "Maintenance & Repairs",
-  "Tyres",
-  "Spare Parts",
   "Driver Wages / Allowance",
   "Tolls & Levies",
   "Insurance",
   "Miscellaneous",
+];
+
+const MAINTENANCE_CATEGORIES = [
+  "Maintenance & Repairs",
+  "Tyres",
+  "Spare Parts",
 ];
 
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -71,7 +74,7 @@ export default function FleetFinanceTracker() {
   const [fetchingData, setFetchingData] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
-  const [activeInfoTransaction, setActiveInfoTransaction] = useState(null); // Click to show info modal
+  const [activeInfoTransaction, setActiveInfoTransaction] = useState(null);
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -80,6 +83,7 @@ export default function FleetFinanceTracker() {
   const [fleetStats, setFleetStats] = useState([]);
   const [globalTotals, setGlobalTotals] = useState({ rev: 0, exp: 0, net: 0 });
   const [selectedVehicleId, setSelectedVehicleId] = useState(null);
+  const [activeTab, setActiveTab] = useState("general"); 
 
   // Authentication Check
   useEffect(() => {
@@ -107,56 +111,47 @@ export default function FleetFinanceTracker() {
         .map(d => ({ id: d.id, ...d.data() }))
         .filter(inv => inv.date && inv.date.startsWith(monthPrefix));
 
-      // ... inside fetchAnalysisData() in page.jsx ...
+      monthlyInvoices.forEach(inv => {
+        (inv.items || []).forEach(item => {
+          let matchedVehicle = VEHICLES.find(v => v.id === item.id);
+          
+          if (!matchedVehicle) {
+            matchedVehicle = VEHICLES.find(v => {
+              const cleanTruckName = v.name.split(' (')[0].toLowerCase().trim();
+              const cleanTruckNumber = v.id.replace(/\D/g, "");
+              const itemName = (item.name || "").toLowerCase();
+              const itemDesc = (item.description || "").toLowerCase();
 
-monthlyInvoices.forEach(inv => {
-  (inv.items || []).forEach(item => {
-    let matchedVehicle = VEHICLES.find(v => v.id === item.id);
-    
-    // SMART SEARCH: If no direct ID match, test description/name for equipment names OR mob/demob keywords
-    if (!matchedVehicle) {
-      matchedVehicle = VEHICLES.find(v => {
-        const cleanTruckName = v.name.split(' (')[0].toLowerCase().trim(); // e.g., "mixer 001"
-        const cleanTruckNumber = v.id.replace(/\D/g, ""); // extracts only numbers, e.g., "001"
-        
-        const itemName = (item.name || "").toLowerCase();
-        const itemDesc = (item.description || "").toLowerCase();
+              const matchesName = itemName.includes(cleanTruckName) || itemDesc.includes(cleanTruckName);
+              const isMobOrDemob = itemName.includes("mob") || itemName.includes("mobil") || itemDesc.includes("mob") || itemDesc.includes("mobil");
+              const mentionsNumber = cleanTruckNumber && (itemName.includes(cleanTruckNumber) || itemDesc.includes(cleanTruckNumber));
 
-        // 1. Direct name mentions (e.g., "Hire of Mixer 001")
-        const matchesName = itemName.includes(cleanTruckName) || itemDesc.includes(cleanTruckName);
-        
-        // 2. Mob/demob specific tracking:
-        // Matches "Mob of 001", "Demobilization Mixer 001", "Mixer 001 mob"
-        const isMobOrDemob = itemName.includes("mob") || itemName.includes("mobil") || itemDesc.includes("mob") || itemDesc.includes("mobil");
-        const mentionsNumber = cleanTruckNumber && (itemName.includes(cleanTruckNumber) || itemDesc.includes(cleanTruckNumber));
+              return matchesName || (isMobOrDemob && mentionsNumber);
+            });
+          }
 
-        return matchesName || (isMobOrDemob && mentionsNumber);
-      });
-    }
+          if (matchedVehicle && statsMap[matchedVehicle.id]) {
+            const price = Number(item.price || item.rate || 0);
+            const days = Number(item.days || item.qty || item.quantity || 1);
+            const amt = Number(item.total || item.amount || (price * days) || 0);
 
-    if (matchedVehicle && statsMap[matchedVehicle.id]) {
-      const price = Number(item.price || item.rate || 0);
-      const days = Number(item.days || item.qty || item.quantity || 1);
-      const amt = Number(item.total || item.amount || (price * days) || 0);
+            if (amt > 0) {
+              statsMap[matchedVehicle.id].rev += amt;
+              
+              const isMobItem = (item.name || "").toLowerCase().includes("mob") || (item.name || "").toLowerCase().includes("mobil");
+              const displayCategory = isMobItem ? "Mob / Demob" : "Job Revenue";
 
-      if (amt > 0) {
-        statsMap[matchedVehicle.id].rev += amt;
-        
-        // Label it clearly in the breakdown list
-        const isMobItem = (item.name || "").toLowerCase().includes("mob") || (item.name || "").toLowerCase().includes("mobil");
-        const displayCategory = isMobItem ? "Mob / Demob" : "Job Revenue";
-
-        statsMap[matchedVehicle.id].invSources.push({ 
-          date: inv.date, 
-          desc: item.name || item.description || inv.subject || `Invoice #${inv.number || 'N/A'}`, 
-          category: displayCategory,
-          customer: inv.customerName || "Bostine Logistics",
-          amount: amt 
+              statsMap[matchedVehicle.id].invSources.push({ 
+                date: inv.date, 
+                desc: item.name || item.description || inv.subject || `Invoice #${inv.number || 'N/A'}`, 
+                category: displayCategory,
+                customer: inv.customerName || "Bostine Logistics",
+                amount: amt 
+              });
+            }
+          }
         });
-      }
-    }
-  });
-});
+      });
       
       const expSnapshot = await getDocs(collection(db, "fleet_data"));
       expSnapshot.docs.forEach(docSnap => {
@@ -252,11 +247,18 @@ monthlyInvoices.forEach(inv => {
   const selectedVehicle = selectedVehicleId ? fleetStats.find(v => v.id === selectedVehicleId) : null;
   const years = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1];
 
+  let generalLogs = [];
+  let maintenanceLogs = [];
+  if (selectedVehicle) {
+    generalLogs = selectedVehicle.expSources.filter(e => !MAINTENANCE_CATEGORIES.includes(e.category));
+    maintenanceLogs = selectedVehicle.expSources.filter(e => MAINTENANCE_CATEGORIES.includes(e.category));
+  }
+  const displayedLogs = activeTab === "general" ? generalLogs : maintenanceLogs;
+
   return (
     <div className="min-h-screen bg-[#f7f5fa] font-sans pb-12 px-4 sm:px-6">
       <div className="max-w-5xl mx-auto mt-4 animate-in fade-in duration-200">
         
-        {/* RESPONSIVE HEADER: Title stacks below on mobile, inline on desktop */}
         <div className="brand-diagonal text-white px-6 py-5 rounded-t-xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex flex-col gap-1">
             <h1 className="font-medium text-[20px] tracking-tight m-0">
@@ -286,7 +288,6 @@ monthlyInvoices.forEach(inv => {
 
         <main className="mt-6">
           
-          {/* Month/Year Navigation Bar */}
           <div className="flex flex-wrap items-center justify-between gap-4 bg-white border border-[#e7e1ef] rounded-xl p-3 mb-6 shadow-sm">
             <div className="flex items-center gap-2">
               <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-[#fafafa] rounded-lg text-brand-purple transition-colors"><ChevronLeft size={20}/></button>
@@ -306,7 +307,6 @@ monthlyInvoices.forEach(inv => {
           </div>
 
           {selectedVehicle ? (
-            /* --- MICRO VIEW: SINGLE VEHICLE DRILL-DOWN & EXPENSE TRACKER --- */
             <div className="space-y-6 animate-in fade-in duration-300">
               
               <div className="bg-white border border-[#e7e1ef] rounded-2xl p-5 sm:p-8 shadow-sm">
@@ -319,14 +319,13 @@ monthlyInvoices.forEach(inv => {
                   <h2 className="text-2xl font-bold text-[#1f1230]">{selectedVehicle.name}</h2>
                 </div>
 
-                {/* Scoreboard Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
                   <div className="card-stat p-5">
                     <div className="card-label">GENERATED REVENUE</div>
                     <div className="card-number">{fmtMoney(selectedVehicle.rev)}</div>
                   </div>
                   <div className="card-stat p-5">
-                    <div className="card-label">TOTAL EXPENSES</div>
+                    <div className="card-label">TOTAL OUTFLOWS</div>
                     <div className="card-number">{fmtMoney(selectedVehicle.exp)}</div>
                   </div>
                   <div className={`p-5 ${selectedVehicle.net >= 0 ? 'card-profit-positive' : 'card-profit-negative'}`}>
@@ -337,18 +336,33 @@ monthlyInvoices.forEach(inv => {
                   </div>
                 </div>
 
-                {/* Inline Expense Entry form */}
-                <div className="mb-8">
-                  <AddExpenseForm 
-                    defaultDate={year === now.getFullYear() && month === now.getMonth() ? todayStr() : `${year}-${pad(month + 1)}-01`}
-                    onAdd={(entry) => addExpenseEntry(selectedVehicle.id, selectedVehicle.expSources, entry)}
-                  />
+                {/* THE NEW TABBED EXPENSE FORM */}
+                <div className="mb-8 border border-[#e7e1ef] rounded-xl overflow-hidden bg-white shadow-sm">
+                  <div className="flex border-b border-[#e7e1ef] bg-[#f7f5fa]">
+                    <button 
+                      onClick={() => setActiveTab('general')}
+                      className={`flex-1 py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${activeTab === 'general' ? 'bg-white text-brand-purple border-b-2 border-brand-purple' : 'text-[#6f6480] hover:text-[#1f1230]'}`}
+                    >
+                      <TrendingDown size={16} /> General Expenses
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('maintenance')}
+                      className={`flex-1 py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${activeTab === 'maintenance' ? 'bg-white text-brand-purple border-b-2 border-brand-purple' : 'text-[#6f6480] hover:text-[#1f1230]'}`}
+                    >
+                      <Wrench size={16} /> Maintenance Logs
+                    </button>
+                  </div>
+                  <div className="p-5">
+                    <AddExpenseForm 
+                      activeTab={activeTab}
+                      defaultDate={year === now.getFullYear() && month === now.getMonth() ? todayStr() : `${year}-${pad(month + 1)}-01`}
+                      onAdd={(entry) => addExpenseEntry(selectedVehicle.id, selectedVehicle.expSources, entry)}
+                    />
+                  </div>
                 </div>
 
-                {/* Ledger splits */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   
-                  {/* Revenue Table sources (Clickable list items added!) */}
                   <div>
                     <h3 className="text-[#1f1230] font-semibold mb-4 border-b border-[#e7e1ef] pb-2 flex items-center gap-2">
                       <TrendingUp size={16} className="text-stat-positive" /> Income Sources ({selectedVehicle.invSources.length})
@@ -377,29 +391,29 @@ monthlyInvoices.forEach(inv => {
                     )}
                   </div>
 
-                  {/* Expenses dynamic ledger */}
                   <div>
                     <div className="flex justify-between items-center mb-4 border-b border-[#e7e1ef] pb-2">
                       <h3 className="text-[#1f1230] font-semibold flex items-center gap-2">
-                        <TrendingDown size={16} className="text-stat-negative" /> Expense Logs ({selectedVehicle.expSources.length})
+                        {activeTab === 'general' ? <TrendingDown size={16} className="text-stat-negative" /> : <Wrench size={16} className="text-brand-purple" />} 
+                        {activeTab === 'general' ? 'General Log' : 'Maintenance Log'} ({displayedLogs.length})
                       </h3>
                       {saving && <Loader2 size={14} className="animate-spin text-brand-magenta" />}
                     </div>
-                    {selectedVehicle.expSources.length === 0 ? (
-                      <p className="text-[#6f6480] text-sm">No expenses logged for this month.</p>
+                    {displayedLogs.length === 0 ? (
+                      <p className="text-[#6f6480] text-sm">No {activeTab} logged for this month.</p>
                     ) : (
                       <ul className="space-y-3">
-                        {selectedVehicle.expSources.map((src, i) => (
+                        {displayedLogs.map((src, i) => (
                           <li 
                             key={src.id || i} 
                             className="flex justify-between items-start text-sm p-3 bg-white hover:bg-[#fafafa] rounded-lg border border-[#e7e1ef] transition-all"
                           >
                             <div 
-                              onClick={() => setActiveInfoTransaction({ ...src, type: "Expense", customer: "Supplier/Vendor" })}
+                              onClick={() => setActiveInfoTransaction({ ...src, type: "Expense", customer: activeTab === 'maintenance' ? "Mechanic / Vendor" : "Supplier/Vendor" })}
                               className="cursor-pointer flex-1"
                             >
                               <div className="flex items-center gap-2">
-                                <span className="pill-badge-negative text-[10px] uppercase font-bold">{src.category}</span>
+                                <span className={`${activeTab === 'maintenance' ? 'bg-[#f7f5fa] text-brand-purple border border-[#e7e1ef]' : 'pill-badge-negative'} px-2 py-0.5 rounded-full text-[10px] uppercase font-bold`}>{src.category}</span>
                                 <span className="font-medium text-[#1f1230] capitalize">{src.desc}</span>
                               </div>
                               <div className="text-xs text-[#6f6480] mt-1.5">{formatDateNG(src.date)}</div>
@@ -424,10 +438,8 @@ monthlyInvoices.forEach(inv => {
             </div>
 
           ) : (
-            /* --- MACRO VIEW: GLOBAL DASHBOARD (Restored Profit/Loss dynamic Colors) --- */
             <div className="space-y-8 animate-in fade-in duration-300">
               
-              {/* Global score panels */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="card-stat p-6 flex flex-col justify-center">
                   <div className="flex items-center gap-2 text-[#6f6480] text-sm font-semibold uppercase tracking-wider mb-2">
@@ -438,7 +450,7 @@ monthlyInvoices.forEach(inv => {
                 
                 <div className="card-stat p-6 flex flex-col justify-center">
                   <div className="flex items-center gap-2 text-[#6f6480] text-sm font-semibold uppercase tracking-wider mb-2">
-                    <TrendingDown size={16} className="text-brand-magenta" /> Total Expenses
+                    <TrendingDown size={16} className="text-brand-magenta" /> Total Outflows
                   </div>
                   <div className="card-number text-brand-magenta">{fmtMoney(globalTotals.exp)}</div>
                 </div>
@@ -453,7 +465,6 @@ monthlyInvoices.forEach(inv => {
                 </div>
               </div>
 
-              {/* Fleet Grids */}
               {['mixer', 'pump', 'excavator'].map(type => {
                 const groupStats = fleetStats.filter(v => v.type === type);
                 if (groupStats.length === 0) return null;
@@ -482,13 +493,12 @@ monthlyInvoices.forEach(inv => {
                                 <span className="font-medium text-brand-purple">{fmtMoney(v.rev)}</span>
                               </div>
                               <div className="flex justify-between border-b border-[#f7f5fa] pb-2">
-                                <span className="text-[#6f6480]">Exp:</span>
+                                <span className="text-[#6f6480]">Outflows:</span>
                                 <span className="font-medium text-brand-magenta">{fmtMoney(v.exp)}</span>
                               </div>
                             </div>
                           </div>
                           
-                          {/* DYNAMIC PROFITS COLOR LOGIC IMPLEMENTED */}
                           <div className="flex justify-between pt-2 mt-2 border-t border-[#e7e1ef]/40">
                             <span className="text-[#6f6480] font-medium text-sm">Net:</span>
                             <span className={`font-semibold text-sm ${v.net >= 0 ? 'text-stat-positive' : 'text-stat-negative'}`}>
@@ -510,10 +520,8 @@ monthlyInvoices.forEach(inv => {
         </main>
       </div>
       
-      {/* 1. Export Modal Dialog Overlay */}
       {exportOpen && <ExportPanel onClose={() => setExportOpen(false)} />}
 
-      {/* 2. TRANSACTION DETAIL MODAL POPUP (Click to show info) */}
       {activeInfoTransaction && (
         <div className="fixed inset-0 bg-black/45 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white border border-[#e7e1ef] rounded-2xl w-full max-w-sm p-6 shadow-xl animate-in zoom-in-95 duration-150">
@@ -536,6 +544,10 @@ monthlyInvoices.forEach(inv => {
               <div>
                 <span className="block text-xs text-[#6f6480] font-medium">Source / Payee</span>
                 <span className="text-[#1f1230] font-semibold">{activeInfoTransaction.customer || "Bostine Logistics"}</span>
+              </div>
+              <div>
+                <span className="block text-xs text-[#6f6480] font-medium">Category</span>
+                <span className="text-[#1f1230] font-semibold">{activeInfoTransaction.category}</span>
               </div>
               <div>
                 <span className="block text-xs text-[#6f6480] font-medium">Description</span>
@@ -568,14 +580,15 @@ monthlyInvoices.forEach(inv => {
   );
 }
 
-// Subform for Logging Expenses
-function AddExpenseForm({ defaultDate, onAdd }) {
+function AddExpenseForm({ activeTab, defaultDate, onAdd }) {
+  const categories = activeTab === "maintenance" ? MAINTENANCE_CATEGORIES : GENERAL_CATEGORIES;
   const [date, setDate] = useState(defaultDate);
-  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [category, setCategory] = useState(categories[0]);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
 
   useEffect(() => { setDate(defaultDate); }, [defaultDate]);
+  useEffect(() => { setCategory(categories[0]); }, [activeTab]);
 
   function submit(e) {
     e.preventDefault();
@@ -586,8 +599,7 @@ function AddExpenseForm({ defaultDate, onAdd }) {
   }
 
   return (
-    <form onSubmit={submit} className="bg-white border border-[#e7e1ef] rounded-xl p-5">
-      <div className="font-semibold text-sm text-[#1f1230] mb-3">Add expense entry</div>
+    <form onSubmit={submit}>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 items-end">
         <div>
           <label className="block text-xs font-semibold text-[#6f6480] mb-1">Date</label>
@@ -596,27 +608,25 @@ function AddExpenseForm({ defaultDate, onAdd }) {
         <div>
           <label className="block text-xs font-semibold text-[#6f6480] mb-1">Category</label>
           <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full px-3 py-2 border border-[#e7e1ef] rounded-lg text-sm bg-white text-[#1f1230]">
-            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         <div>
           <label className="block text-xs font-semibold text-[#6f6480] mb-1">Description</label>
-          <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Fuel purchase" className="w-full px-3 py-2 border border-[#e7e1ef] rounded-lg text-sm bg-white text-[#1f1230]" />
+          <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={activeTab === 'maintenance' ? "e.g. Changed Engine Oil" : "e.g. Fuel purchase"} className="w-full px-3 py-2 border border-[#e7e1ef] rounded-lg text-sm bg-white text-[#1f1230]" required />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-[#6f6480] mb-1">Amount (₦)</label>
+          <label className="block text-xs font-semibold text-[#6f6480] mb-1">Cost (₦)</label>
           <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="w-full px-3 py-2 border border-[#e7e1ef] rounded-lg text-sm bg-white text-[#1f1230]" required />
         </div>
         <button type="submit" className="btn-primary flex items-center justify-center gap-2 h-[38px] w-full font-medium">
-          <Plus size={16} /> Add Entry
+          <Plus size={16} /> Add {activeTab === 'maintenance' ? 'Log' : 'Entry'}
         </button>
       </div>
     </form>
   );
 }
 
-// Combined Export Overlay Modal panel
-// Combined Export Overlay Modal panel (Polished PDF theme)
 function ExportPanel({ onClose }) {
   const jsPdfReady = useJsPDF();
   const now = new Date();
@@ -651,7 +661,6 @@ function ExportPanel({ onClose }) {
     return monthChips;
   }
 
-  // Dual DB Query Pipeline: Gathers Invoices (Revenue) + Fleet Entries (Expenses)
   async function gatherRows() {
     const vehicles = VEHICLES.filter((v) => selectedIds.has(v.id));
     const months = monthsToExport();
@@ -660,7 +669,6 @@ function ExportPanel({ onClose }) {
     for (const m of months) {
       const monthPrefix = `${m.year}-${pad(m.month + 1)}`;
       
-      // 1. Fetch Invoices for this Month
       let monthlyInvoices = [];
       try {
         const invSnapshot = await getDocs(collection(db, "invoices"));
@@ -672,7 +680,6 @@ function ExportPanel({ onClose }) {
       }
 
       for (const v of vehicles) {
-        // Find matching invoice items for this vehicle
         monthlyInvoices.forEach(inv => {
           (inv.items || []).forEach(item => {
             let matchedVehicle = VEHICLES.find(truck => truck.id === item.id);
@@ -706,7 +713,6 @@ function ExportPanel({ onClose }) {
           });
         });
 
-        // 2. Fetch Expenses for this Vehicle for this Month
         const sKey = `expenses-${v.id}-${monthPrefix}`;
         try {
           const docRef = doc(db, "fleet_data", sKey);
@@ -751,7 +757,6 @@ function ExportPanel({ onClose }) {
     return `${monthChips.length} Month Report`;
   }
 
-  // Generates complete, categorized financial CSV rows
   async function handleExportCSV() {
     setBusy(true); setStatus("");
     const rows = await gatherRows();
@@ -794,7 +799,6 @@ function ExportPanel({ onClose }) {
     setStatus("CSV downloaded.");
   }
 
-  // High Fidelity PDF Generation matching your brand design and specifications
   async function handleExportPDF() {
     if (!jsPdfReady || !window.jspdf) { setStatus("PDF engine still loading..."); return; }
     
@@ -808,14 +812,12 @@ function ExportPanel({ onClose }) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF("p", "mm", "a4");
     
-    // 1. Header Styling Block
-    doc.setFillColor(52, 20, 92); // Deep Purple #34145c
+    doc.setFillColor(52, 20, 92);
     doc.rect(0, 0, 210, 36, "F");
     
-    doc.setFillColor(226, 19, 122); // Magenta Accent bar #e2137a
+    doc.setFillColor(226, 19, 122); 
     doc.rect(0, 36, 210, 1.5, "F");
 
-    // Title Texts
     doc.setFont("helvetica", "bold");
     doc.setFontSize(16);
     doc.setTextColor(255, 255, 255);
@@ -841,7 +843,6 @@ function ExportPanel({ onClose }) {
       grandRevenue += vehicleRev;
       grandExpenses += vehicleExp;
       
-      // Vehicle Section Header in PDF
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
       doc.setTextColor(52, 20, 92);
@@ -857,32 +858,30 @@ function ExportPanel({ onClose }) {
           r.description || "-",
           Number(r.amount).toLocaleString("en-NG", { minimumFractionDigits: 2 })
         ]),
-        // Custom styling variables to match your Web UI exactly
         headStyles: { 
-          fillColor: [52, 20, 92], // Deep Purple
+          fillColor: [52, 20, 92],
           textColor: [255, 255, 255], 
           fontSize: 8,
           fontStyle: "bold",
           cellPadding: 3
         },
-        alternateRowStyles: { fillColor: [250, 249, 252] }, // Light Lavender-grey alternate row tint
+        alternateRowStyles: { fillColor: [250, 249, 252] },
         bodyStyles: { 
           fontSize: 8, 
-          textColor: [31, 18, 48], // Inky typography
+          textColor: [31, 18, 48], 
           cellPadding: 3
         },
         columnStyles: {
           4: { halign: "right" }
         },
-        // Dynamic status row styling for Revenue/Expense types in tables
         didParseCell: function (data) {
           if (data.column.index === 1 && data.section === "body") {
             if (data.cell.raw === "REVENUE") {
-              data.cell.styles.textColor = [59, 109, 17]; // Green text
-              data.cell.styles.fillColor = [234, 243, 222]; // Green background
+              data.cell.styles.textColor = [59, 109, 17];
+              data.cell.styles.fillColor = [234, 243, 222]; 
             } else if (data.cell.raw === "EXPENSE") {
-              data.cell.styles.textColor = [155, 28, 28]; // Red text
-              data.cell.styles.fillColor = [253, 232, 232]; // Red background
+              data.cell.styles.textColor = [155, 28, 28];
+              data.cell.styles.fillColor = [253, 232, 232];
             }
           }
         },
@@ -891,10 +890,9 @@ function ExportPanel({ onClose }) {
       
       y = doc.lastAutoTable.finalY + 4;
 
-      // Small Vehicle Scoreboard beneath the table
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
-      doc.setTextColor(111, 100, 128); // Muted gray
+      doc.setTextColor(111, 100, 128);
       doc.text(`Revenue: ${fmtMoney(vehicleRev)}   |   Expenses: ${fmtMoney(vehicleExp)}`, 14, y);
       
       doc.setFont("helvetica", "bold");
@@ -904,12 +902,10 @@ function ExportPanel({ onClose }) {
       y += 12;
     });
     
-    // Grand totals summaries page-break guards
     if (y > 230) { doc.addPage(); y = 25; }
     
     const grandNet = grandRevenue - grandExpenses;
     
-    // Grand Total Sheet Section
     doc.setDrawColor(231, 225, 239);
     doc.line(14, y, 196, y);
     
@@ -929,7 +925,6 @@ function ExportPanel({ onClose }) {
     doc.text(`Total Logged Expenses: ${fmtMoney(grandExpenses)}`, 14, y);
     
     y += 6;
-    // Net profit card block rendering on PDF
     doc.setFillColor(grandNet >= 0 ? 234 : 253, grandNet >= 0 ? 243 : 232, grandNet >= 0 ? 222 : 232);
     doc.roundedRect(14, y, 182, 12, 2, 2, "F");
     
@@ -951,7 +946,6 @@ function ExportPanel({ onClose }) {
         </div>
         <p className="text-[#6f6480] text-sm -mt-2">Select any vehicles and active months to compile a custom multi-month financial ledger (includes Revenue and Expenses).</p>
 
-        {/* Vehicles selection */}
         <div>
           <div className="flex justify-between items-center mb-2">
             <span className="text-[11px] font-bold tracking-wider text-brand-purple uppercase">VEHICLES</span>
@@ -975,13 +969,11 @@ function ExportPanel({ onClose }) {
           </div>
         </div>
 
-        {/* Mode Toggle */}
         <div className="flex gap-2 border-b border-[#e7e1ef] pb-3">
           <button onClick={() => setMode("months")} className={`flex-1 py-2 text-xs font-semibold rounded-lg border cursor-pointer ${mode === "months" ? 'border-brand-magenta bg-[#f6d9e9] text-brand-magenta' : 'border-[#e7e1ef] bg-white text-[#6f6480]'}`}>Pick specific months</button>
           <button onClick={() => setMode("year")} className={`flex-1 py-2 text-xs font-semibold rounded-lg border cursor-pointer ${mode === "year" ? 'border-brand-magenta bg-[#f6d9e9] text-brand-magenta' : 'border-[#e7e1ef] bg-white text-[#6f6480]'}`}>Full year</button>
         </div>
 
-        {/* Custom date range controllers */}
         {mode === "months" ? (
           <div className="space-y-3">
             <div className="flex gap-2 items-center">
@@ -1014,7 +1006,6 @@ function ExportPanel({ onClose }) {
 
         {status && <div className="text-xs font-medium text-brand-magenta">{status}</div>}
 
-        {/* Footer controls */}
         <div className="flex gap-2 justify-end pt-2 border-t border-[#e7e1ef]">
           <button 
             onClick={handleExportCSV} 
@@ -1034,4 +1025,4 @@ function ExportPanel({ onClose }) {
       </div>
     </div>
   );
-}
+}4
