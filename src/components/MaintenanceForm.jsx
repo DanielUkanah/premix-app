@@ -8,7 +8,7 @@ const ExpensesDashboard = () => {
     <div className="p-6 space-y-6">
       {/* Page Header */}
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">Financial Outflows</h1>
+        <h1 className="text-2xl font-bold text-gray-800">Expenses</h1>
       </div>
 
       {/* Tab Switcher Navigation */}

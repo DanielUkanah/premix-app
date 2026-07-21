@@ -450,7 +450,7 @@ export default function FleetFinanceTracker() {
                 
                 <div className="card-stat p-6 flex flex-col justify-center">
                   <div className="flex items-center gap-2 text-[#6f6480] text-sm font-semibold uppercase tracking-wider mb-2">
-                    <TrendingDown size={16} className="text-brand-magenta" /> Total Outflows
+                    <TrendingDown size={16} className="text-brand-magenta" /> Total Expenses
                   </div>
                   <div className="card-number text-brand-magenta">{fmtMoney(globalTotals.exp)}</div>
                 </div>
@@ -493,7 +493,7 @@ export default function FleetFinanceTracker() {
                                 <span className="font-medium text-brand-purple">{fmtMoney(v.rev)}</span>
                               </div>
                               <div className="flex justify-between border-b border-[#f7f5fa] pb-2">
-                                <span className="text-[#6f6480]">Outflows:</span>
+                                <span className="text-[#6f6480]">Expenses:</span>
                                 <span className="font-medium text-brand-magenta">{fmtMoney(v.exp)}</span>
                               </div>
                             </div>
