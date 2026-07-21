@@ -5,25 +5,23 @@ import {
   Loader2, LogOut, ChevronLeft, ChevronRight, ArrowLeft, 
   TrendingUp, TrendingDown, Activity, Truck, Waves, 
   Download, FileText, Plus, Trash2, FileBarChart, X, 
-  CheckSquare, Square, Info, Wrench
+  CheckSquare, Square, Info
 } from "lucide-react";
 import { db, auth } from "@/lib/firebase";
 import { collection, getDocs, doc, getDoc, setDoc } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { VEHICLES } from "@/lib/fleet";
 
-const GENERAL_CATEGORIES = [
+// COMBINED CATEGORIES FOR A SINGLE FORM
+const CATEGORIES = [
   "Fuel",
+  "Maintenance & Repairs",
+  "Tyres",
+  "Spare Parts",
   "Driver Wages / Allowance",
   "Tolls & Levies",
   "Insurance",
   "Miscellaneous",
-];
-
-const MAINTENANCE_CATEGORIES = [
-  "Maintenance & Repairs",
-  "Tyres",
-  "Spare Parts",
 ];
 
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -83,7 +81,6 @@ export default function FleetFinanceTracker() {
   const [fleetStats, setFleetStats] = useState([]);
   const [globalTotals, setGlobalTotals] = useState({ rev: 0, exp: 0, net: 0 });
   const [selectedVehicleId, setSelectedVehicleId] = useState(null);
-  const [activeTab, setActiveTab] = useState("general"); 
 
   // Authentication Check
   useEffect(() => {
@@ -247,85 +244,101 @@ export default function FleetFinanceTracker() {
   const selectedVehicle = selectedVehicleId ? fleetStats.find(v => v.id === selectedVehicleId) : null;
   const years = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1];
 
-  let generalLogs = [];
-  let maintenanceLogs = [];
-  if (selectedVehicle) {
-    generalLogs = selectedVehicle.expSources.filter(e => !MAINTENANCE_CATEGORIES.includes(e.category));
-    maintenanceLogs = selectedVehicle.expSources.filter(e => MAINTENANCE_CATEGORIES.includes(e.category));
-  }
-  const displayedLogs = activeTab === "general" ? generalLogs : maintenanceLogs;
-
   return (
-    <div className="min-h-screen bg-[#f7f5fa] font-sans pb-12 px-4 sm:px-6">
-      <div className="max-w-5xl mx-auto mt-4 animate-in fade-in duration-200">
+    <div className="min-h-screen bg-[#f7f5fa] font-sans pb-12 px-3 sm:px-6">
+      <div className="max-w-5xl mx-auto mt-3 sm:mt-4 animate-in fade-in duration-200">
         
-        <div className="brand-diagonal text-white px-6 py-5 rounded-t-xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="flex flex-col gap-1">
-            <h1 className="font-medium text-[20px] tracking-tight m-0">
-              {selectedVehicle ? `Premix TrustConcrete — ${selectedVehicle.name}` : "Premix TrustConcrete — Fleet & Finance"}
+        <div className="brand-diagonal text-white px-4 py-4 sm:px-6 sm:py-5 rounded-t-xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3 md:gap-4">
+          <div className="flex flex-col gap-1 min-w-0">
+            <h1 className="font-medium text-[17px] sm:text-[20px] tracking-tight m-0 truncate">
+              {selectedVehicle ? `${selectedVehicle.name}` : "Premix TrustConcrete"}
             </h1>
-            <span className="text-[13px] text-white/75 font-normal">
+            <span className="text-[12px] sm:text-[13px] text-white/75 font-normal">
               {selectedVehicle ? "Dashboard → Vehicle Detail" : "Dashboard → Fleet Overview"}
             </span>
           </div>
-          <div className="flex flex-row items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+          <div className="flex flex-row items-center gap-2 sm:gap-3 w-full md:w-auto justify-between md:justify-end">
             {!selectedVehicle && (
               <button 
                 onClick={() => setExportOpen(true)} 
-                className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-md px-3 py-1.5 text-sm font-medium transition-all text-white cursor-pointer"
+                className="flex items-center gap-1.5 sm:gap-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-md px-2.5 py-1.5 sm:px-3 text-[13px] sm:text-sm font-medium transition-all text-white cursor-pointer"
               >
-                <FileBarChart size={15} /> Export Reports
+                <FileBarChart size={14} className="sm:hidden" /><FileBarChart size={15} className="hidden sm:block" /> 
+                <span className="hidden xs:inline">Export Reports</span>
+                <span className="xs:hidden">Export</span>
               </button>
             )}
             <button 
               onClick={() => signOut(auth)} 
-              className="flex items-center gap-2 text-white/90 hover:text-white text-sm font-medium bg-transparent border-none cursor-pointer p-0 transition-colors"
+              className="flex items-center gap-1.5 sm:gap-2 text-white/90 hover:text-white text-[13px] sm:text-sm font-medium bg-transparent border-none cursor-pointer p-0 transition-colors"
             >
-              <LogOut size={16} /> Sign out
+              <LogOut size={15} /> Sign out
             </button>
           </div>
         </div>
 
-        <main className="mt-6">
+        <main className="mt-4 sm:mt-6">
           
-          <div className="flex flex-wrap items-center justify-between gap-4 bg-white border border-[#e7e1ef] rounded-xl p-3 mb-6 shadow-sm">
-            <div className="flex items-center gap-2">
-              <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-[#fafafa] rounded-lg text-brand-purple transition-colors"><ChevronLeft size={20}/></button>
-              <span className="font-semibold text-[#1f1230] min-w-[140px] text-center">{MONTH_NAMES[month]} {year}</span>
-              <button onClick={() => changeMonth(1)} className="p-2 hover:bg-[#fafafa] rounded-lg text-brand-purple transition-colors"><ChevronRight size={20}/></button>
+          <div className="sticky top-2 z-20 flex items-center justify-between gap-3 bg-white/95 backdrop-blur border border-[#e7e1ef] rounded-xl p-2.5 sm:p-3 mb-5 sm:mb-6 shadow-sm">
+            <div className="flex items-center gap-1 sm:gap-2">
+              <button onClick={() => changeMonth(-1)} className="p-1.5 sm:p-2 hover:bg-[#fafafa] rounded-lg text-brand-purple transition-colors"><ChevronLeft size={18}/></button>
+              <span className="font-semibold text-[#1f1230] text-[13px] sm:text-base min-w-[100px] sm:min-w-[140px] text-center">{MONTH_NAMES[month]} {year}</span>
+              <button onClick={() => changeMonth(1)} className="p-1.5 sm:p-2 hover:bg-[#fafafa] rounded-lg text-brand-purple transition-colors"><ChevronRight size={18}/></button>
             </div>
             
-            <div className="flex items-center gap-2">
-              <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="border border-[#e7e1ef] rounded-lg px-2 py-1.5 text-sm outline-none focus:border-brand-magenta bg-white">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="hidden sm:block border border-[#e7e1ef] rounded-lg px-2 py-1.5 text-sm outline-none focus:border-brand-magenta bg-white">
                 {MONTH_NAMES.map((m, i) => <option key={m} value={i}>{m}</option>)}
               </select>
-              <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="border border-[#e7e1ef] rounded-lg px-2 py-1.5 text-sm outline-none focus:border-brand-magenta bg-white">
+              <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="border border-[#e7e1ef] rounded-lg px-2 py-1 sm:py-1.5 text-[12px] sm:text-sm outline-none focus:border-brand-magenta bg-white">
                 {years.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
-              {fetchingData && <Loader2 size={16} className="animate-spin text-brand-magenta ml-2" />}
+              {fetchingData && <Loader2 size={15} className="animate-spin text-brand-magenta ml-1" />}
             </div>
           </div>
 
           {selectedVehicle ? (
-            <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="space-y-5 sm:space-y-6 animate-in fade-in duration-300">
               
-              <div className="bg-white border border-[#e7e1ef] rounded-2xl p-5 sm:p-8 shadow-sm">
-                <button onClick={() => setSelectedVehicleId(null)} className="flex items-center gap-2 text-[#6f6480] hover:text-brand-purple font-medium text-sm mb-6 transition-colors">
+              <div className="bg-white border border-[#e7e1ef] rounded-2xl p-4 sm:p-8 shadow-sm">
+                <button onClick={() => setSelectedVehicleId(null)} className="flex items-center gap-2 text-[#6f6480] hover:text-brand-purple font-medium text-sm mb-5 sm:mb-6 transition-colors">
                   <ArrowLeft size={16} /> Back to Fleet Overview
                 </button>
                 
-                <div className="flex items-center gap-3 mb-8">
-                  <VehicleIcon type={selectedVehicle.type} size={32} className="text-brand-magenta" />
-                  <h2 className="text-2xl font-bold text-[#1f1230]">{selectedVehicle.name}</h2>
+                <div className="flex items-center gap-3 mb-6 sm:mb-8">
+                  <VehicleIcon type={selectedVehicle.type} size={28} className="text-brand-magenta shrink-0 sm:hidden" />
+                  <VehicleIcon type={selectedVehicle.type} size={32} className="text-brand-magenta shrink-0 hidden sm:block" />
+                  <h2 className="text-xl sm:text-2xl font-bold text-[#1f1230]">{selectedVehicle.name}</h2>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+                {/* Mobile: gradient hero + two pills */}
+                <div className="sm:hidden space-y-3 mb-6">
+                  <div className={`rounded-2xl p-5 text-white shadow-sm relative overflow-hidden ${selectedVehicle.net >= 0 ? 'brand-diagonal' : 'bg-[#7a1f1f]'}`}>
+                    <div className="flex items-center gap-2 text-white/80 text-[11px] font-semibold uppercase tracking-wider mb-1">
+                      <Activity size={13} /> Net Profit
+                    </div>
+                    <div className="text-3xl font-bold">{selectedVehicle.net >= 0 ? '+' : ''}{fmtMoney(selectedVehicle.net)}</div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="card-stat p-4">
+                      <div className="card-label">REVENUE</div>
+                      <div className="text-base font-bold text-[#1f1230]">{fmtMoney(selectedVehicle.rev)}</div>
+                    </div>
+                    <div className="card-stat p-4">
+                      <div className="card-label">EXPENSES</div>
+                      <div className="text-base font-bold text-[#1f1230]">{fmtMoney(selectedVehicle.exp)}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Desktop: 3-up grid */}
+                <div className="hidden sm:grid grid-cols-3 gap-4 mb-8">
                   <div className="card-stat p-5">
                     <div className="card-label">GENERATED REVENUE</div>
                     <div className="card-number">{fmtMoney(selectedVehicle.rev)}</div>
                   </div>
                   <div className="card-stat p-5">
-                    <div className="card-label">TOTAL OUTFLOWS</div>
+                    <div className="card-label">TOTAL EXPENSES</div>
                     <div className="card-number">{fmtMoney(selectedVehicle.exp)}</div>
                   </div>
                   <div className={`p-5 ${selectedVehicle.net >= 0 ? 'card-profit-positive' : 'card-profit-negative'}`}>
@@ -336,33 +349,17 @@ export default function FleetFinanceTracker() {
                   </div>
                 </div>
 
-                {/* THE NEW TABBED EXPENSE FORM */}
-                <div className="mb-8 border border-[#e7e1ef] rounded-xl overflow-hidden bg-white shadow-sm">
-                  <div className="flex border-b border-[#e7e1ef] bg-[#f7f5fa]">
-                    <button 
-                      onClick={() => setActiveTab('general')}
-                      className={`flex-1 py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${activeTab === 'general' ? 'bg-white text-brand-purple border-b-2 border-brand-purple' : 'text-[#6f6480] hover:text-[#1f1230]'}`}
-                    >
-                      <TrendingDown size={16} /> General Expenses
-                    </button>
-                    <button 
-                      onClick={() => setActiveTab('maintenance')}
-                      className={`flex-1 py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${activeTab === 'maintenance' ? 'bg-white text-brand-purple border-b-2 border-brand-purple' : 'text-[#6f6480] hover:text-[#1f1230]'}`}
-                    >
-                      <Wrench size={16} /> Maintenance Logs
-                    </button>
-                  </div>
-                  <div className="p-5">
-                    <AddExpenseForm 
-                      activeTab={activeTab}
-                      defaultDate={year === now.getFullYear() && month === now.getMonth() ? todayStr() : `${year}-${pad(month + 1)}-01`}
-                      onAdd={(entry) => addExpenseEntry(selectedVehicle.id, selectedVehicle.expSources, entry)}
-                    />
-                  </div>
+                {/* THE UNIFIED EXPENSE FORM */}
+                <div className="mb-8">
+                  <AddExpenseForm 
+                    defaultDate={year === now.getFullYear() && month === now.getMonth() ? todayStr() : `${year}-${pad(month + 1)}-01`}
+                    onAdd={(entry) => addExpenseEntry(selectedVehicle.id, selectedVehicle.expSources, entry)}
+                  />
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
                   
+                  {/* Revenue Table */}
                   <div>
                     <h3 className="text-[#1f1230] font-semibold mb-4 border-b border-[#e7e1ef] pb-2 flex items-center gap-2">
                       <TrendingUp size={16} className="text-stat-positive" /> Income Sources ({selectedVehicle.invSources.length})
@@ -375,15 +372,15 @@ export default function FleetFinanceTracker() {
                           <li 
                             key={i} 
                             onClick={() => setActiveInfoTransaction({ ...src, type: "Revenue" })}
-                            className="flex justify-between items-start text-sm p-3 bg-white hover:bg-[#fafafa] rounded-lg border border-[#e7e1ef] cursor-pointer hover:border-brand-magenta transition-all"
+                            className="flex justify-between items-start gap-3 text-sm p-3 bg-white hover:bg-[#fafafa] rounded-lg border border-[#e7e1ef] cursor-pointer hover:border-brand-magenta transition-all"
                           >
-                            <div>
-                              <div className="font-medium text-[#1f1230]">{src.customer}</div>
-                              <div className="text-xs text-[#6f6480] mt-0.5">{src.desc} &bull; {formatDateNG(src.date)}</div>
+                            <div className="min-w-0">
+                              <div className="font-medium text-[#1f1230] truncate">{src.customer}</div>
+                              <div className="text-xs text-[#6f6480] mt-0.5 truncate">{src.desc} &bull; {formatDateNG(src.date)}</div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
                               <div className="font-semibold text-brand-purple whitespace-nowrap">{fmtMoney(src.amount)}</div>
-                              <Info size={14} className="text-[#6f6480]/40 group-hover:text-brand-magenta" />
+                              <Info size={14} className="text-[#6f6480]/40 group-hover:text-brand-magenta hidden sm:block" />
                             </div>
                           </li>
                         ))}
@@ -391,34 +388,34 @@ export default function FleetFinanceTracker() {
                     )}
                   </div>
 
+                  {/* Unified Expenses Ledger */}
                   <div>
                     <div className="flex justify-between items-center mb-4 border-b border-[#e7e1ef] pb-2">
                       <h3 className="text-[#1f1230] font-semibold flex items-center gap-2">
-                        {activeTab === 'general' ? <TrendingDown size={16} className="text-stat-negative" /> : <Wrench size={16} className="text-brand-purple" />} 
-                        {activeTab === 'general' ? 'General Log' : 'Maintenance Log'} ({displayedLogs.length})
+                        <TrendingDown size={16} className="text-stat-negative" /> Expense Logs ({selectedVehicle.expSources.length})
                       </h3>
                       {saving && <Loader2 size={14} className="animate-spin text-brand-magenta" />}
                     </div>
-                    {displayedLogs.length === 0 ? (
-                      <p className="text-[#6f6480] text-sm">No {activeTab} logged for this month.</p>
+                    {selectedVehicle.expSources.length === 0 ? (
+                      <p className="text-[#6f6480] text-sm">No expenses logged for this month.</p>
                     ) : (
                       <ul className="space-y-3">
-                        {displayedLogs.map((src, i) => (
+                        {selectedVehicle.expSources.map((src, i) => (
                           <li 
                             key={src.id || i} 
-                            className="flex justify-between items-start text-sm p-3 bg-white hover:bg-[#fafafa] rounded-lg border border-[#e7e1ef] transition-all"
+                            className="flex justify-between items-start gap-3 text-sm p-3 bg-white hover:bg-[#fafafa] rounded-lg border border-[#e7e1ef] transition-all"
                           >
                             <div 
-                              onClick={() => setActiveInfoTransaction({ ...src, type: "Expense", customer: activeTab === 'maintenance' ? "Mechanic / Vendor" : "Supplier/Vendor" })}
-                              className="cursor-pointer flex-1"
+                              onClick={() => setActiveInfoTransaction({ ...src, type: "Expense", customer: "Mechanic / Vendor" })}
+                              className="cursor-pointer flex-1 min-w-0"
                             >
-                              <div className="flex items-center gap-2">
-                                <span className={`${activeTab === 'maintenance' ? 'bg-[#f7f5fa] text-brand-purple border border-[#e7e1ef]' : 'pill-badge-negative'} px-2 py-0.5 rounded-full text-[10px] uppercase font-bold`}>{src.category}</span>
-                                <span className="font-medium text-[#1f1230] capitalize">{src.desc}</span>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`${["Maintenance & Repairs", "Tyres", "Spare Parts"].includes(src.category) ? 'bg-[#f7f5fa] text-brand-purple border border-[#e7e1ef]' : 'pill-badge-negative'} px-2 py-0.5 rounded-full text-[10px] uppercase font-bold`}>{src.category}</span>
+                                <span className="font-medium text-[#1f1230] capitalize truncate">{src.desc}</span>
                               </div>
                               <div className="text-xs text-[#6f6480] mt-1.5">{formatDateNG(src.date)}</div>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                               <span className="font-semibold text-brand-magenta whitespace-nowrap">{fmtMoney(src.amount)}</span>
                               <button 
                                 onClick={() => deleteExpenseEntry(selectedVehicle.id, selectedVehicle.expSources, src.id)} 
@@ -438,9 +435,37 @@ export default function FleetFinanceTracker() {
             </div>
 
           ) : (
-            <div className="space-y-8 animate-in fade-in duration-300">
+            <div className="space-y-7 sm:space-y-8 animate-in fade-in duration-300">
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Mobile: gradient hero net profit + two pills */}
+              <div className="sm:hidden space-y-3">
+                <div className={`rounded-2xl p-5 text-white shadow-sm relative overflow-hidden ${globalTotals.net >= 0 ? 'brand-diagonal' : 'bg-[#7a1f1f]'}`}>
+                  <div className="flex items-center gap-2 text-white/80 text-[11px] font-semibold uppercase tracking-wider mb-1">
+                    <Activity size={13} /> Net Profit &bull; {MONTH_NAMES[month]} {year}
+                  </div>
+                  <div className="text-3xl font-bold">{globalTotals.net >= 0 ? '+' : ''}{fmtMoney(globalTotals.net)}</div>
+                  <svg width="90" height="90" viewBox="0 0 90 90" className="absolute -top-4 -right-4 opacity-10">
+                    <polygon points="90,0 90,90 0,0" fill="#fff" />
+                  </svg>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="card-stat p-4">
+                    <div className="flex items-center gap-1.5 text-[#6f6480] text-[10px] font-semibold uppercase tracking-wide mb-1">
+                      <TrendingUp size={12} className="text-brand-purple" /> Revenue
+                    </div>
+                    <div className="text-base font-bold text-brand-purple">{fmtMoney(globalTotals.rev)}</div>
+                  </div>
+                  <div className="card-stat p-4">
+                    <div className="flex items-center gap-1.5 text-[#6f6480] text-[10px] font-semibold uppercase tracking-wide mb-1">
+                      <TrendingDown size={12} className="text-brand-magenta" /> Expenses
+                    </div>
+                    <div className="text-base font-bold text-brand-magenta">{fmtMoney(globalTotals.exp)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Desktop: 3-up grid */}
+              <div className="hidden sm:grid grid-cols-3 gap-4">
                 <div className="card-stat p-6 flex flex-col justify-center">
                   <div className="flex items-center gap-2 text-[#6f6480] text-sm font-semibold uppercase tracking-wider mb-2">
                     <TrendingUp size={16} className="text-brand-purple" /> Total Revenue
@@ -471,45 +496,24 @@ export default function FleetFinanceTracker() {
 
                 return (
                   <div key={type}>
-                    <h3 className="section-header mb-4">{type}s Performance</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                      {groupStats.map(v => (
-                        <div 
-                          key={v.id} 
-                          onClick={() => setSelectedVehicleId(v.id)}
-                          className="bg-white border border-[#e7e1ef] rounded-xl p-4 cursor-pointer hover:shadow-md hover:border-brand-magenta transition-all group relative overflow-hidden flex flex-col justify-between"
-                        >
-                          <div>
-                            <div className="flex items-start justify-between mb-4">
-                              <div className="flex items-center gap-2">
-                                <VehicleIcon type={v.type} size={20} className="text-brand-magenta" />
-                                <span className="font-semibold text-[#1f1230] text-sm">{v.name}</span>
-                              </div>
-                            </div>
-                            
-                            <div className="space-y-1.5 text-sm">
-                              <div className="flex justify-between">
-                                <span className="text-[#6f6480]">Rev:</span>
-                                <span className="font-medium text-brand-purple">{fmtMoney(v.rev)}</span>
-                              </div>
-                              <div className="flex justify-between border-b border-[#f7f5fa] pb-2">
-                                <span className="text-[#6f6480]">Expenses:</span>
-                                <span className="font-medium text-brand-magenta">{fmtMoney(v.exp)}</span>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex justify-between pt-2 mt-2 border-t border-[#e7e1ef]/40">
-                            <span className="text-[#6f6480] font-medium text-sm">Net:</span>
-                            <span className={`font-semibold text-sm ${v.net >= 0 ? 'text-stat-positive' : 'text-stat-negative'}`}>
-                              {v.net >= 0 ? '+' : ''}{fmtMoney(v.net)}
-                            </span>
-                          </div>
+                    <div className="flex items-center justify-between mb-3 sm:mb-4">
+                      <h3 className="section-header m-0">{type}s Performance</h3>
+                      <span className="text-[11px] text-[#a89bb8] font-medium sm:hidden">swipe &rarr;</span>
+                    </div>
 
-                          <svg width="40" height="40" viewBox="0 0 60 60" className="absolute -top-2 -right-2 opacity-5 group-hover:opacity-10 transition-opacity">
-                            <polygon points="60,0 60,60 0,0" fill={v.type === "pump" ? "#3A2472" : "#C4237F"} />
-                          </svg>
+                    {/* Mobile: horizontal scroll-snap carousel */}
+                    <div className="flex sm:hidden gap-3 overflow-x-auto pb-2 -mx-3 px-3 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      {groupStats.map(v => (
+                        <div key={v.id} className="min-w-[76%] snap-start">
+                          <VehicleCard v={v} onClick={() => setSelectedVehicleId(v.id)} />
                         </div>
+                      ))}
+                    </div>
+
+                    {/* Desktop/tablet: grid */}
+                    <div className="hidden sm:grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {groupStats.map(v => (
+                        <VehicleCard key={v.id} v={v} onClick={() => setSelectedVehicleId(v.id)} />
                       ))}
                     </div>
                   </div>
@@ -524,7 +528,7 @@ export default function FleetFinanceTracker() {
 
       {activeInfoTransaction && (
         <div className="fixed inset-0 bg-black/45 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white border border-[#e7e1ef] rounded-2xl w-full max-w-sm p-6 shadow-xl animate-in zoom-in-95 duration-150">
+          <div className="bg-white border border-[#e7e1ef] rounded-2xl w-full max-w-sm p-5 sm:p-6 shadow-xl animate-in zoom-in-95 duration-150">
             <div className="flex justify-between items-start mb-4">
               <div>
                 <span className={`pill-badge ${activeInfoTransaction.type === 'Revenue' ? 'pill-badge-positive' : 'pill-badge-negative'} text-[10px] uppercase font-bold tracking-wider mb-2`}>
@@ -580,15 +584,70 @@ export default function FleetFinanceTracker() {
   );
 }
 
-function AddExpenseForm({ activeTab, defaultDate, onAdd }) {
-  const categories = activeTab === "maintenance" ? MAINTENANCE_CATEGORIES : GENERAL_CATEGORIES;
+// SINGLE MIXER/VEHICLE CARD — used in both the mobile carousel and desktop grid
+function VehicleCard({ v, onClick }) {
+  const isActive = v.rev > 0 || v.exp > 0;
+  const total = v.rev + v.exp;
+  const revPct = total > 0 ? (v.rev / total) * 100 : 0;
+  const expPct = total > 0 ? 100 - revPct : 0;
+
+  return (
+    <div 
+      onClick={onClick}
+      className={`bg-white border rounded-xl p-4 cursor-pointer hover:shadow-md transition-all group relative overflow-hidden flex flex-col justify-between h-full border-l-4 ${isActive ? 'border-l-brand-magenta border-t-[#e7e1ef] border-r-[#e7e1ef] border-b-[#e7e1ef] hover:border-brand-magenta' : 'border-l-[#e7e1ef] border-t-[#e7e1ef] border-r-[#e7e1ef] border-b-[#e7e1ef] hover:border-brand-magenta opacity-80'}`}
+    >
+      <div>
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <VehicleIcon type={v.type} size={20} className="text-brand-magenta shrink-0" />
+            <span className="font-semibold text-[#1f1230] text-sm truncate">{v.name}</span>
+          </div>
+          <span className={`shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${isActive ? 'bg-[#f6d9e9] text-brand-magenta' : 'bg-[#f0ecf5] text-[#a89bb8]'}`}>
+            {isActive ? 'Active' : 'Idle'}
+          </span>
+        </div>
+        
+        <div className="space-y-1.5 text-sm">
+          <div className="flex justify-between">
+            <span className="text-[#6f6480]">Rev:</span>
+            <span className="font-medium text-brand-purple">{fmtMoney(v.rev)}</span>
+          </div>
+          <div className="flex justify-between pb-2">
+            <span className="text-[#6f6480]">Outflows:</span>
+            <span className="font-medium text-brand-magenta">{fmtMoney(v.exp)}</span>
+          </div>
+        </div>
+
+        {total > 0 && (
+          <div className="h-1.5 rounded-full bg-[#f0ecf5] overflow-hidden flex mb-2">
+            <div style={{ width: `${revPct}%` }} className="bg-brand-purple h-full" />
+            <div style={{ width: `${expPct}%` }} className="bg-brand-magenta h-full" />
+          </div>
+        )}
+      </div>
+      
+      <div className="flex justify-between pt-2 mt-1 border-t border-[#e7e1ef]/60">
+        <span className="text-[#6f6480] font-medium text-sm">Net:</span>
+        <span className={`font-semibold text-sm ${v.net >= 0 ? 'text-stat-positive' : 'text-stat-negative'}`}>
+          {v.net >= 0 ? '+' : ''}{fmtMoney(v.net)}
+        </span>
+      </div>
+
+      <svg width="40" height="40" viewBox="0 0 60 60" className="absolute -top-2 -right-2 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
+        <polygon points="60,0 60,60 0,0" fill={v.type === "pump" ? "#3A2472" : "#C4237F"} />
+      </svg>
+    </div>
+  );
+}
+
+// THE SINGLE COMBINED FORM
+function AddExpenseForm({ defaultDate, onAdd }) {
   const [date, setDate] = useState(defaultDate);
-  const [category, setCategory] = useState(categories[0]);
+  const [category, setCategory] = useState(CATEGORIES[0]);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
 
   useEffect(() => { setDate(defaultDate); }, [defaultDate]);
-  useEffect(() => { setCategory(categories[0]); }, [activeTab]);
 
   function submit(e) {
     e.preventDefault();
@@ -599,28 +658,29 @@ function AddExpenseForm({ activeTab, defaultDate, onAdd }) {
   }
 
   return (
-    <form onSubmit={submit}>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 items-end">
-        <div>
+    <form onSubmit={submit} className="bg-white border border-[#e7e1ef] rounded-xl p-4 sm:p-5 shadow-sm">
+      <div className="font-semibold text-sm text-[#1f1230] mb-3">Add Expense or Maintenance Entry</div>
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-5 gap-3 items-end">
+        <div className="col-span-2 sm:col-span-1">
           <label className="block text-xs font-semibold text-[#6f6480] mb-1">Date</label>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2 border border-[#e7e1ef] rounded-lg text-sm bg-white text-[#1f1230]" required />
         </div>
         <div>
           <label className="block text-xs font-semibold text-[#6f6480] mb-1">Category</label>
           <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full px-3 py-2 border border-[#e7e1ef] rounded-lg text-sm bg-white text-[#1f1230]">
-            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
-        <div>
+        <div className="col-span-2 sm:col-span-1">
           <label className="block text-xs font-semibold text-[#6f6480] mb-1">Description</label>
-          <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={activeTab === 'maintenance' ? "e.g. Changed Engine Oil" : "e.g. Fuel purchase"} className="w-full px-3 py-2 border border-[#e7e1ef] rounded-lg text-sm bg-white text-[#1f1230]" required />
+          <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Fuel or Oil Change" className="w-full px-3 py-2 border border-[#e7e1ef] rounded-lg text-sm bg-white text-[#1f1230]" required />
         </div>
         <div>
           <label className="block text-xs font-semibold text-[#6f6480] mb-1">Cost (₦)</label>
           <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="w-full px-3 py-2 border border-[#e7e1ef] rounded-lg text-sm bg-white text-[#1f1230]" required />
         </div>
-        <button type="submit" className="btn-primary flex items-center justify-center gap-2 h-[38px] w-full font-medium">
-          <Plus size={16} /> Add {activeTab === 'maintenance' ? 'Log' : 'Entry'}
+        <button type="submit" className="btn-primary flex items-center justify-center gap-2 h-[38px] w-full font-medium col-span-2 sm:col-span-2 md:col-span-1">
+          <Plus size={16} /> Add log
         </button>
       </div>
     </form>
@@ -937,14 +997,14 @@ function ExportPanel({ onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl w-full max-w-xl max-h-[88vh] overflow-y-auto p-6 flex flex-col gap-5 border border-[#e7e1ef]">
+    <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50">
+      <div className="bg-white rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto p-4 sm:p-6 flex flex-col gap-4 sm:gap-5 border border-[#e7e1ef]">
         
         <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-[#1f1230]">Export Multi-Month Transactions</h2>
+          <h2 className="text-base sm:text-lg font-semibold text-[#1f1230]">Export Multi-Month Transactions</h2>
           <button onClick={onClose} className="bg-transparent border-none cursor-pointer text-[#6f6480] hover:text-[#1f1230]"><X size={20} /></button>
         </div>
-        <p className="text-[#6f6480] text-sm -mt-2">Select any vehicles and active months to compile a custom multi-month financial ledger (includes Revenue and Expenses).</p>
+        <p className="text-[#6f6480] text-[13px] sm:text-sm -mt-2">Select any vehicles and active months to compile a custom multi-month financial ledger (includes Revenue and Expenses).</p>
 
         <div>
           <div className="flex justify-between items-center mb-2">
@@ -976,14 +1036,16 @@ function ExportPanel({ onClose }) {
 
         {mode === "months" ? (
           <div className="space-y-3">
-            <div className="flex gap-2 items-center">
-              <select value={chipMonth} onChange={(e) => setChipMonth(Number(e.target.value))} className="flex-1 px-3 py-2 border border-[#e7e1ef] rounded-lg text-sm bg-white text-[#1f1230]">
-                {MONTH_NAMES.map((m, i) => <option key={m} value={i}>{m}</option>)}
-              </select>
-              <select value={chipYear} onChange={(e) => setChipYear(Number(e.target.value))} className="flex-1 px-3 py-2 border border-[#e7e1ef] rounded-lg text-sm bg-white text-[#1f1230]">
-                {years.map((y) => <option key={y} value={y}>{y}</option>)}
-              </select>
-              <button onClick={addChip} className="btn-secondary flex items-center gap-1.5 h-[38px]"><Plus size={14} /> Add</button>
+            <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+              <div className="flex gap-2">
+                <select value={chipMonth} onChange={(e) => setChipMonth(Number(e.target.value))} className="flex-1 px-3 py-2 border border-[#e7e1ef] rounded-lg text-sm bg-white text-[#1f1230]">
+                  {MONTH_NAMES.map((m, i) => <option key={m} value={i}>{m}</option>)}
+                </select>
+                <select value={chipYear} onChange={(e) => setChipYear(Number(e.target.value))} className="flex-1 px-3 py-2 border border-[#e7e1ef] rounded-lg text-sm bg-white text-[#1f1230]">
+                  {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+              <button onClick={addChip} className="btn-secondary flex items-center justify-center gap-1.5 h-[38px]"><Plus size={14} /> Add</button>
             </div>
             <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
               {monthChips.length === 0 && <div className="text-xs text-[#6f6480]">No active months included yet.</div>}
@@ -1025,4 +1087,4 @@ function ExportPanel({ onClose }) {
       </div>
     </div>
   );
-}4
+}

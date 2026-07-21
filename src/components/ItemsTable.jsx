@@ -1,113 +1,111 @@
-import React from "react";
-import { Edit2 } from "lucide-react";
+"use client";
+import { Trash2 } from "lucide-react";
+import { getVatApplies } from "@/lib/catalogRules";
+
+function fmt(n) {
+  return Number(n || 0).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 export default function ItemsTable({ items, onRemove, onUpdate, discPct, taxPct }) {
-  // 1. Calculate Subtotal
-  const subtotal = items.reduce((sum, item) => sum + (Number(item.qty || 0) * Number(item.rate || 0)), 0);
-  
-  // 2. Calculate General Discount
-  const discountAmt = subtotal * (Number(discPct || 0) / 100);
-  
-  // 3. Calculate Smart VAT (ONLY applies to items with isEquipment: true)
-  const vatAmt = items.reduce((sum, item) => {
-    if (item.isEquipment) {
-      const itemTotal = Number(item.qty || 0) * Number(item.rate || 0);
-      const itemDiscount = itemTotal * (Number(discPct || 0) / 100);
-      return sum + ((itemTotal - itemDiscount) * (Number(taxPct || 0) / 100));
-    }
-    return sum;
-  }, 0);
+  const lineAmount = (it) => Number(it.qty || 1) * Number(it.rate || 0);
 
-  // 4. Grand Total
-  const grandTotal = subtotal - discountAmt + vatAmt;
+  const subtotal = items.reduce((sum, it) => sum + lineAmount(it), 0);
+  const vatableSubtotal = items.reduce((sum, it) => sum + (getVatApplies(it) ? lineAmount(it) : 0), 0);
+
+  const discountAmt = subtotal * (Number(discPct) || 0) / 100;
+  const vatableAfterDiscount = vatableSubtotal * (1 - (Number(discPct) || 0) / 100);
+  const taxAmt = vatableAfterDiscount * (Number(taxPct) || 0) / 100;
+  const grandTotal = (subtotal - discountAmt) + taxAmt;
 
   return (
-    <section className="card p-4 overflow-x-auto">
+    <section className="card p-4 sm:p-5">
       <h3 className="font-semibold text-[#3A2472] mb-3">Invoice items</h3>
+
       {items.length === 0 ? (
-        <div className="text-sm text-[#8B7FA8] py-4 text-center">No items added yet. Click an item from the catalog above.</div>
+        <p className="text-sm text-[#6f6480] text-center py-6">No items added yet. Tap an item from the catalog above.</p>
       ) : (
-        <table className="w-full text-sm text-left">
-          <thead>
-            <tr className="border-b border-[#E4DCF0] text-[#3A2472]">
-              <th className="py-2 font-semibold">Item</th>
-              <th className="py-2 font-semibold w-24">Qty / Days</th>
-              <th className="py-2 font-semibold w-48">Rate (NGN)</th>
-              <th className="py-2 font-semibold text-right">Amount</th>
-              <th className="py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item, idx) => {
-              const itemTotal = Number(item.qty || 0) * Number(item.rate || 0);
-              return (
-                <tr key={idx} className="border-b border-[#E4DCF0]">
-                  <td className="py-3 pr-2">
-                    <div className="font-medium text-[#241A3D]">{item.name}</div>
-                    <div className="text-xs text-[#8B7FA8]">{item.description}</div>
-                    {item.isEquipment && (
-                      <span className="text-[10px] bg-[#FDF0F7] text-[#C4237F] px-1.5 py-0.5 rounded mt-1 inline-block font-medium">
-                        VAT Applies
+        <div className="space-y-3">
+          {items.map((item, idx) => {
+            const amount = lineAmount(item);
+            const vatApplies = getVatApplies(item);
+            return (
+              <div key={idx} className="border border-[#E4DCF0] rounded-xl p-3.5 sm:p-4">
+                <div className="flex justify-between items-start gap-3 mb-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-[#241A3D] text-[15px]">{item.name}</div>
+                    {item.description && (
+                      <div className="text-xs text-[#6f6480] mt-0.5">{item.description}</div>
+                    )}
+                    {vatApplies && (
+                      <span className="inline-block mt-1.5 text-[10px] font-bold uppercase tracking-wide bg-[#FDEAF3] text-[#C4237F] px-2 py-0.5 rounded-full">
+                        VAT applies
                       </span>
                     )}
-                  </td>
-                  <td className="py-3">
-                    <input 
-                      type="number" 
-                      min="1"
-                      value={item.qty} 
-                      onChange={(e) => onUpdate(idx, "qty", e.target.value)}
-                      className="w-16 border border-[#E4DCF0] rounded px-2 py-1 outline-none focus:border-[#C4237F] text-center"
-                    />
-                  </td>
-                  <td className="py-3">
-                    <div className="flex items-center gap-2 group">
-                      <input 
-                        type="number" 
-                        value={item.rate} 
-                        onChange={(e) => onUpdate(idx, "rate", e.target.value)}
-                        className="w-28 border border-transparent hover:border-[#E4DCF0] rounded px-2 py-1 outline-none focus:border-[#C4237F] transition-colors bg-transparent"
+                  </div>
+                  <button
+                    onClick={() => onRemove(idx)}
+                    aria-label={`Remove ${item.name}`}
+                    className="shrink-0 text-[#C4237F] hover:bg-[#FDEAF3] p-2 rounded-lg transition-colors"
+                  >
+                    <Trash2 size={17} />
+                  </button>
+                </div>
+
+                <div className="flex items-end justify-between gap-3 pt-3 border-t border-[#F0ECF5]">
+                  <div className="flex gap-2.5">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-[#a89bb8] uppercase mb-1">Qty / Days</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={item.qty}
+                        onChange={(e) => onUpdate(idx, "qty", Number(e.target.value) || 1)}
+                        className="w-16 border border-[#E4DCF0] rounded-lg px-2 py-1.5 text-sm text-center focus:border-[#C4237F] outline-none"
                       />
-                      <Edit2 size={14} className="text-[#8B7FA8] opacity-50 group-hover:opacity-100 transition-opacity" />
                     </div>
-                  </td>
-                  <td className="py-3 text-right font-medium text-[#241A3D]">
-                    {itemTotal.toLocaleString("en-NG", { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="py-3 text-right">
-                    <button onClick={() => onRemove(idx)} className="text-xs text-[#C4237F] font-medium hover:underline">
-                      remove
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot className="border-t-2 border-[#3A2472]">
-            <tr>
-              <td colSpan="3" className="py-2 text-[#8B7FA8]">Subtotal</td>
-              <td className="py-2 text-right font-medium text-[#241A3D]">{subtotal.toLocaleString("en-NG", { minimumFractionDigits: 2 })}</td>
-              <td></td>
-            </tr>
-            {discPct > 0 && (
-              <tr>
-                <td colSpan="3" className="py-1 text-[#8B7FA8]">Discount ({discPct}%)</td>
-                <td className="py-1 text-right text-[#C4237F]">- {discountAmt.toLocaleString("en-NG", { minimumFractionDigits: 2 })}</td>
-                <td></td>
-              </tr>
-            )}
-            <tr>
-              <td colSpan="3" className="py-1 text-[#8B7FA8]">VAT ({taxPct}%) — <span className="text-xs italic">Equipment Only</span></td>
-              <td className="py-1 text-right text-[#8B7FA8]">{vatAmt.toLocaleString("en-NG", { minimumFractionDigits: 2 })}</td>
-              <td></td>
-            </tr>
-            <tr className="text-base font-semibold">
-              <td colSpan="3" className="py-3 text-[#3A2472]">Grand total</td>
-              <td className="py-3 text-right text-[#241A3D]">NGN {grandTotal.toLocaleString("en-NG", { minimumFractionDigits: 2 })}</td>
-              <td></td>
-            </tr>
-          </tfoot>
-        </table>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-[#a89bb8] uppercase mb-1">Rate (₦)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={item.rate}
+                        onChange={(e) => onUpdate(idx, "rate", Number(e.target.value) || 0)}
+                        className="w-24 sm:w-28 border border-[#E4DCF0] rounded-lg px-2 py-1.5 text-sm focus:border-[#C4237F] outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-[10px] font-semibold text-[#a89bb8] uppercase mb-1">Amount</div>
+                    <div className="font-bold text-[#3A2472] text-[15px] sm:text-base whitespace-nowrap">₦{fmt(amount)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <div className="border-t border-[#E4DCF0] mt-4 pt-4 space-y-1.5">
+          <div className="flex justify-between text-sm text-[#6f6480]">
+            <span>Subtotal</span>
+            <span className="font-medium text-[#241A3D]">₦{fmt(subtotal)}</span>
+          </div>
+          {discPct > 0 && (
+            <div className="flex justify-between text-sm text-[#6f6480]">
+              <span>Discount ({discPct}%)</span>
+              <span className="font-medium text-[#C4237F]">-₦{fmt(discountAmt)}</span>
+            </div>
+          )}
+          <div className="flex justify-between text-sm text-[#6f6480]">
+            <span>VAT ({taxPct}% on truck hire only)</span>
+            <span className="font-medium text-[#241A3D]">₦{fmt(taxAmt)}</span>
+          </div>
+          <div className="flex justify-between text-base font-bold text-[#3A2472] pt-2 border-t border-[#F0ECF5]">
+            <span>Grand total</span>
+            <span>₦{fmt(grandTotal)}</span>
+          </div>
+        </div>
       )}
     </section>
   );
