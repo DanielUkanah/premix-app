@@ -80,6 +80,8 @@ export default function FleetFinanceTracker() {
 
   const [fleetStats, setFleetStats] = useState([]);
   const [globalTotals, setGlobalTotals] = useState({ rev: 0, exp: 0, net: 0 });
+  const [generalRevenue, setGeneralRevenue] = useState({ amount: 0, sources: [] });
+  const [historyModal, setHistoryModal] = useState(null); // 'revenue' | 'expenses' | 'net' | null
   const [selectedVehicleId, setSelectedVehicleId] = useState(null);
 
   // Authentication Check
@@ -108,6 +110,9 @@ export default function FleetFinanceTracker() {
         .map(d => ({ id: d.id, ...d.data() }))
         .filter(inv => inv.date && inv.date.startsWith(monthPrefix));
 
+      let unassignedRevenue = 0;
+      const unassignedSources = [];
+
       monthlyInvoices.forEach(inv => {
         (inv.items || []).forEach(item => {
           let matchedVehicle = VEHICLES.find(v => v.id === item.id);
@@ -127,25 +132,24 @@ export default function FleetFinanceTracker() {
             });
           }
 
+          const price = Number(item.price || item.rate || 0);
+          const days = Number(item.days || item.qty || item.quantity || 1);
+          const amt = Number(item.total || item.amount || (price * days) || 0);
+          if (amt <= 0) return;
+
+          const isMobItem = (item.name || "").toLowerCase().includes("mob") || (item.name || "").toLowerCase().includes("mobil");
+          const displayCategory = isMobItem ? "Mob / Demob" : "Job Revenue";
+          const desc = item.name || item.description || inv.subject || `Invoice #${inv.number || 'N/A'}`;
+          const customer = inv.customerName || "Bostine Logistics";
+
           if (matchedVehicle && statsMap[matchedVehicle.id]) {
-            const price = Number(item.price || item.rate || 0);
-            const days = Number(item.days || item.qty || item.quantity || 1);
-            const amt = Number(item.total || item.amount || (price * days) || 0);
-
-            if (amt > 0) {
-              statsMap[matchedVehicle.id].rev += amt;
-              
-              const isMobItem = (item.name || "").toLowerCase().includes("mob") || (item.name || "").toLowerCase().includes("mobil");
-              const displayCategory = isMobItem ? "Mob / Demob" : "Job Revenue";
-
-              statsMap[matchedVehicle.id].invSources.push({ 
-                date: inv.date, 
-                desc: item.name || item.description || inv.subject || `Invoice #${inv.number || 'N/A'}`, 
-                category: displayCategory,
-                customer: inv.customerName || "Bostine Logistics",
-                amount: amt 
-              });
-            }
+            statsMap[matchedVehicle.id].rev += amt;
+            statsMap[matchedVehicle.id].invSources.push({ date: inv.date, desc, category: displayCategory, customer, amount: amt });
+          } else {
+            // Not tied to a specific truck (e.g. a job-wide Mobilization/Demobilization
+            // fee) — still counts toward company-wide revenue instead of being dropped.
+            unassignedRevenue += amt;
+            unassignedSources.push({ date: inv.date, desc, category: displayCategory, customer, amount: amt, vehicleName: "General / Mobilization" });
           }
         });
       });
@@ -189,8 +193,10 @@ export default function FleetFinanceTracker() {
         totalExp += s.exp;
         return s;
       });
+      totalRev += unassignedRevenue;
 
       setGlobalTotals({ rev: totalRev, exp: totalExp, net: totalRev - totalExp });
+      setGeneralRevenue({ amount: unassignedRevenue, sources: unassignedSources });
       setFleetStats(finalStats);
 
     } catch (error) {
@@ -439,55 +445,59 @@ export default function FleetFinanceTracker() {
               
               {/* Mobile: gradient hero net profit + two pills */}
               <div className="sm:hidden space-y-3">
-                <div className={`rounded-2xl p-5 text-white shadow-sm relative overflow-hidden ${globalTotals.net >= 0 ? 'brand-diagonal' : 'bg-[#7a1f1f]'}`}>
+                <button
+                  onClick={() => setHistoryModal('net')}
+                  className={`w-full text-left rounded-2xl p-5 text-white shadow-sm relative overflow-hidden active:scale-[0.98] transition-transform ${globalTotals.net >= 0 ? 'brand-diagonal' : 'bg-[#7a1f1f]'}`}
+                >
                   <div className="flex items-center gap-2 text-white/80 text-[11px] font-semibold uppercase tracking-wider mb-1">
                     <Activity size={13} /> Net Profit &bull; {MONTH_NAMES[month]} {year}
                   </div>
                   <div className="text-3xl font-bold">{globalTotals.net >= 0 ? '+' : ''}{fmtMoney(globalTotals.net)}</div>
+                  <div className="text-[11px] text-white/60 mt-1">Tap for breakdown</div>
                   <svg width="90" height="90" viewBox="0 0 90 90" className="absolute -top-4 -right-4 opacity-10">
                     <polygon points="90,0 90,90 0,0" fill="#fff" />
                   </svg>
-                </div>
+                </button>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="card-stat p-4">
+                  <button onClick={() => setHistoryModal('revenue')} className="card-stat p-4 text-left active:scale-[0.98] transition-transform">
                     <div className="flex items-center gap-1.5 text-[#6f6480] text-[10px] font-semibold uppercase tracking-wide mb-1">
                       <TrendingUp size={12} className="text-brand-purple" /> Revenue
                     </div>
                     <div className="text-base font-bold text-brand-purple">{fmtMoney(globalTotals.rev)}</div>
-                  </div>
-                  <div className="card-stat p-4">
+                  </button>
+                  <button onClick={() => setHistoryModal('expenses')} className="card-stat p-4 text-left active:scale-[0.98] transition-transform">
                     <div className="flex items-center gap-1.5 text-[#6f6480] text-[10px] font-semibold uppercase tracking-wide mb-1">
                       <TrendingDown size={12} className="text-brand-magenta" /> Expenses
                     </div>
                     <div className="text-base font-bold text-brand-magenta">{fmtMoney(globalTotals.exp)}</div>
-                  </div>
+                  </button>
                 </div>
               </div>
 
               {/* Desktop: 3-up grid */}
               <div className="hidden sm:grid grid-cols-3 gap-4">
-                <div className="card-stat p-6 flex flex-col justify-center">
+                <button onClick={() => setHistoryModal('revenue')} className="card-stat p-6 flex flex-col justify-center text-left hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-2 text-[#6f6480] text-sm font-semibold uppercase tracking-wider mb-2">
                     <TrendingUp size={16} className="text-brand-purple" /> Total Revenue
                   </div>
                   <div className="card-number text-brand-purple">{fmtMoney(globalTotals.rev)}</div>
-                </div>
+                </button>
                 
-                <div className="card-stat p-6 flex flex-col justify-center">
+                <button onClick={() => setHistoryModal('expenses')} className="card-stat p-6 flex flex-col justify-center text-left hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-2 text-[#6f6480] text-sm font-semibold uppercase tracking-wider mb-2">
                     <TrendingDown size={16} className="text-brand-magenta" /> Total Expenses
                   </div>
                   <div className="card-number text-brand-magenta">{fmtMoney(globalTotals.exp)}</div>
-                </div>
+                </button>
                 
-                <div className={`p-6 rounded-2xl border shadow-sm flex flex-col justify-center ${globalTotals.net >= 0 ? 'card-profit-positive' : 'card-profit-negative'}`}>
+                <button onClick={() => setHistoryModal('net')} className={`p-6 rounded-2xl border shadow-sm flex flex-col justify-center text-left hover:shadow-md transition-shadow ${globalTotals.net >= 0 ? 'card-profit-positive' : 'card-profit-negative'}`}>
                   <div className="flex items-center gap-2 text-[#6f6480] text-sm font-semibold uppercase tracking-wider mb-2">
                     <Activity size={16} className={globalTotals.net >= 0 ? 'text-stat-positive' : 'text-stat-negative'} /> Net Profit
                   </div>
                   <div className="card-number">
                     {globalTotals.net >= 0 ? '+' : ''} {fmtMoney(globalTotals.net)}
                   </div>
-                </div>
+                </button>
               </div>
 
               {['mixer', 'pump', 'excavator'].map(type => {
@@ -525,6 +535,18 @@ export default function FleetFinanceTracker() {
       </div>
       
       {exportOpen && <ExportPanel onClose={() => setExportOpen(false)} />}
+
+      {historyModal && (
+        <HistoryModal
+          type={historyModal}
+          month={month}
+          year={year}
+          fleetStats={fleetStats}
+          generalRevenue={generalRevenue}
+          globalTotals={globalTotals}
+          onClose={() => setHistoryModal(null)}
+        />
+      )}
 
       {activeInfoTransaction && (
         <div className="fixed inset-0 bg-black/45 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -636,6 +658,98 @@ function VehicleCard({ v, onClick }) {
       <svg width="40" height="40" viewBox="0 0 60 60" className="absolute -top-2 -right-2 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
         <polygon points="60,0 60,60 0,0" fill={v.type === "pump" ? "#3A2472" : "#C4237F"} />
       </svg>
+    </div>
+  );
+}
+
+// Breakdown shown when a person taps Total Revenue / Total Expenses / Net Profit.
+// Built entirely from data already loaded for the month — no extra fetch needed.
+function HistoryModal({ type, month, year, fleetStats, generalRevenue, globalTotals, onClose }) {
+  const monthLabel = `${MONTH_NAMES[month]} ${year}`;
+
+  const revenueRows = fleetStats
+    .flatMap(v => v.invSources.map(s => ({ ...s, vehicleName: v.name })))
+    .concat(generalRevenue.sources)
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+  const expenseRows = fleetStats
+    .flatMap(v => v.expSources.map(s => ({ ...s, vehicleName: v.name })))
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+  const title = type === "revenue" ? "Revenue history" : type === "expenses" ? "Expense history" : "Net profit breakdown";
+
+  return (
+    <div className="fixed inset-0 bg-black/45 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50">
+      <div className="bg-white border border-[#e7e1ef] rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
+        <div className="sticky top-0 bg-white border-b border-[#e7e1ef] px-5 py-4 flex justify-between items-center z-10">
+          <div>
+            <h3 className="text-base font-bold text-[#1f1230]">{title}</h3>
+            <span className="text-xs text-[#6f6480]">{monthLabel}</span>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-[#f7f5fa] rounded-full text-[#6f6480] hover:text-[#1f1230] transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-5">
+          {type === "net" && (
+            <div className="space-y-2 mb-5">
+              <div className="flex justify-between text-sm">
+                <span className="text-[#6f6480]">Total revenue</span>
+                <span className="font-semibold text-brand-purple">{fmtMoney(globalTotals.rev)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[#6f6480]">Total expenses</span>
+                <span className="font-semibold text-brand-magenta">{fmtMoney(globalTotals.exp)}</span>
+              </div>
+              <div className={`flex justify-between text-base font-bold pt-2 border-t border-[#e7e1ef] ${globalTotals.net >= 0 ? 'text-stat-positive' : 'text-stat-negative'}`}>
+                <span>Net profit</span>
+                <span>{globalTotals.net >= 0 ? '+' : ''}{fmtMoney(globalTotals.net)}</span>
+              </div>
+            </div>
+          )}
+
+          {type === "revenue" && (
+            revenueRows.length === 0 ? (
+              <p className="text-sm text-[#6f6480] text-center py-6">No revenue recorded for {monthLabel}.</p>
+            ) : (
+              <ul className="space-y-2.5">
+                {revenueRows.map((r, i) => (
+                  <li key={i} className="border border-[#e7e1ef] rounded-lg p-3">
+                    <div className="flex justify-between items-start gap-3">
+                      <div className="min-w-0">
+                        <div className="font-medium text-[#1f1230] text-sm truncate">{r.vehicleName}</div>
+                        <div className="text-xs text-[#6f6480] mt-0.5 truncate">{r.desc} &bull; {formatDateNG(r.date)}</div>
+                      </div>
+                      <span className="font-semibold text-brand-purple text-sm whitespace-nowrap shrink-0">{fmtMoney(r.amount)}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )
+          )}
+
+          {type === "expenses" && (
+            expenseRows.length === 0 ? (
+              <p className="text-sm text-[#6f6480] text-center py-6">No expenses recorded for {monthLabel}.</p>
+            ) : (
+              <ul className="space-y-2.5">
+                {expenseRows.map((r, i) => (
+                  <li key={i} className="border border-[#e7e1ef] rounded-lg p-3">
+                    <div className="flex justify-between items-start gap-3">
+                      <div className="min-w-0">
+                        <div className="font-medium text-[#1f1230] text-sm truncate">{r.vehicleName}</div>
+                        <div className="text-xs text-[#6f6480] mt-0.5 truncate">{r.desc} &bull; {formatDateNG(r.date)}</div>
+                      </div>
+                      <span className="font-semibold text-brand-magenta text-sm whitespace-nowrap shrink-0">{fmtMoney(r.amount)}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )
+          )}
+        </div>
+      </div>
     </div>
   );
 }
